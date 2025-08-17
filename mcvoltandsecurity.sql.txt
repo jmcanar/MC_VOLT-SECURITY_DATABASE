@@ -1,5 +1,5 @@
 -- ===============================
--- UNIVERSIDAD ESTATALA MAZONICA
+-- UNIVERSIDAD ESTATAL AMAZONICA
 -- NOMBRE: CAÑAR JUNCAL JOSE MARCELO 
 -- Base de datos: mcvoltandsecurity
 -- ===============================
@@ -156,7 +156,7 @@ CREATE TABLE ordenes_servicio_empleados (
   CONSTRAINT fk_ose_empleado FOREIGN KEY (empleado_id) REFERENCES empleados(id)
 ) ENGINE=InnoDB;
 
--- Opcional: productos utilizados en una orden de servicio (materiales)
+-- productos utilizados en una orden de servicio (materiales)
 CREATE TABLE ordenes_servicio_items (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   orden_servicio_id BIGINT NOT NULL,
@@ -166,4 +166,5 @@ CREATE TABLE ordenes_servicio_items (
   CONSTRAINT fk_osi_os FOREIGN KEY (orden_servicio_id) REFERENCES ordenes_servicio(id) ON DELETE CASCADE,
   CONSTRAINT fk_osi_prod FOREIGN KEY (producto_id) REFERENCES productos(id)
 ) ENGINE=InnoDB;
+
 
