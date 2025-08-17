@@ -1,0 +1,169 @@
+-- ===============================
+-- UNIVERSIDAD ESTATALA MAZONICA
+-- NOMBRE: CAÑAR JUNCAL JOSE MARCELO 
+-- Base de datos: mcvoltandsecurity
+-- ===============================
+
+SET NAMES utf8mb4;
+SET time_zone = "+00:00";
+
+DROP DATABASE IF EXISTS mcvoltandsecurity;
+CREATE DATABASE mcvoltandsecurity CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE mcvoltandsecurity;
+
+-- =====================================================
+-- ENTIDAD: EMPRESA 
+-- =====================================================
+CREATE TABLE empresa (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(180) NOT NULL,
+  direccion TEXT,
+  contactos VARCHAR(200)  -- teléfonos/emails generales
+) ENGINE=InnoDB;
+
+INSERT INTO empresa (nombre, direccion, contactos)
+VALUES ('MC VOLT&SECURITY', 'Cuenca, Azuay - Ecuador', '099-000-0000 / info@mcvoltsecurity.ec');
+
+-- =====================================================
+-- ENTIDADES PRINCIPALES
+-- =====================================================
+
+-- CLIENTES: (ID, NOMBRE, DIRECCION, SEGMENTO, FRECUENCIA DE COMPRA)
+CREATE TABLE clientes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  direccion TEXT,
+  segmento ENUM('residencial','comercial','industrial','contratista','otro') DEFAULT 'residencial',
+  frecuencia_compra ENUM('baja','media','alta') DEFAULT 'baja'
+) ENGINE=InnoDB;
+
+-- PROVEEDORES: (ID, NOMBRE, DIRECCION)
+CREATE TABLE proveedores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  direccion TEXT
+) ENGINE=InnoDB;
+
+-- EMPLEADOS: (ID, NOMBRE, ROL, Nro_Identificacion)
+CREATE TABLE empleados (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombres VARCHAR(150) NOT NULL,
+  rol VARCHAR(100) NOT NULL,
+  nro_identificacion VARCHAR(30) UNIQUE
+) ENGINE=InnoDB;
+
+-- PRODUCTOS: (ID, TIPO, MARCA, COSTO, CANTIDAD, IP opcional para equipos de red/cámaras)
+CREATE TABLE productos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  tipo VARCHAR(100) NOT NULL,
+  marca VARCHAR(100),
+  costo DECIMAL(12,2) NOT NULL DEFAULT 0,    -- costo de referencia
+  cantidad DECIMAL(12,2) NOT NULL DEFAULT 0, -- stock disponible
+  ip VARCHAR(45) NULL                         -- IPv4/IPv6 si aplica; NULL si no
+) ENGINE=InnoDB;
+
+-- SERVICIOS: (ID, TIPO DE SERVICIO, descripción)
+CREATE TABLE servicios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  tipo_servicio ENUM('instalacion','mantenimiento','reparacion','asesoria') NOT NULL,
+  descripcion TEXT,
+  tarifa_base DECIMAL(12,2) DEFAULT 0
+) ENGINE=InnoDB;
+
+-- =====================================================
+-- RELACIONES 
+-- =====================================================
+
+-- EMPRESA EMPLEA EMPLEADOS  (1:N)
+ALTER TABLE empleados
+  ADD COLUMN empresa_id INT NOT NULL DEFAULT 1,
+  ADD CONSTRAINT fk_empleado_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id);
+
+-- EMPRESA GESTIONA PRODUCTOS (1:N)
+ALTER TABLE productos
+  ADD COLUMN empresa_id INT NOT NULL DEFAULT 1,
+  ADD CONSTRAINT fk_producto_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id);
+
+-- EMPRESA VENDE A CLIENTES (1:N) y CLIENTES COMPRAN PRODUCTOS (N:N)
+-- Normalizamos con: ventas (cabecera) + ventas_items (detalle)
+CREATE TABLE ventas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NOT NULL DEFAULT 1,
+  cliente_id INT NOT NULL,
+  fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  total DECIMAL(12,2) DEFAULT 0,
+  CONSTRAINT fk_ventas_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id),
+  CONSTRAINT fk_ventas_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE ventas_items (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  venta_id BIGINT NOT NULL,
+  producto_id INT NOT NULL,
+  cantidad DECIMAL(12,2) NOT NULL,
+  precio_unitario DECIMAL(12,2) NOT NULL,
+  CONSTRAINT fk_vi_venta FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_vi_producto FOREIGN KEY (producto_id) REFERENCES productos(id)
+) ENGINE=InnoDB;
+
+-- EMPRESA OBTIENE DE PROVEEDORES (1:N) y PROVEEDORES SUMINISTRAN PRODUCTOS (M:N)
+-- Normalizamos con: compras (cabecera) + compras_items (detalle)
+-- NOTA: "Nro Factura" pertenece a la compra, no al proveedor -> corrección del diagrama
+CREATE TABLE compras (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NOT NULL DEFAULT 1,
+  proveedor_id INT NOT NULL,
+  fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  nro_factura VARCHAR(40) NOT NULL, -- corrección: atributo del documento de compra
+  total DECIMAL(12,2) DEFAULT 0,
+  CONSTRAINT fk_compra_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id),
+  CONSTRAINT fk_compra_proveedor FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE compras_items (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  compra_id BIGINT NOT NULL,
+  producto_id INT NOT NULL,
+  cantidad DECIMAL(12,2) NOT NULL,
+  costo_unitario DECIMAL(12,2) NOT NULL,
+  CONSTRAINT fk_ci_compra FOREIGN KEY (compra_id) REFERENCES compras(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ci_producto FOREIGN KEY (producto_id) REFERENCES productos(id)
+) ENGINE=InnoDB;
+
+-- EMPLEADOS REALIZAN SERVICIOS (N:N) y Servicios prestados a CLIENTES (N:M)
+-- Modelamos una orden de servicio con asignaciones de empleados.
+CREATE TABLE ordenes_servicio (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NOT NULL DEFAULT 1,
+  cliente_id INT NOT NULL,
+  servicio_id INT NOT NULL,
+  fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  estado ENUM('programada','en_proceso','completada','cancelada') DEFAULT 'programada',
+  descripcion TEXT,
+  CONSTRAINT fk_os_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id),
+  CONSTRAINT fk_os_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  CONSTRAINT fk_os_servicio FOREIGN KEY (servicio_id) REFERENCES servicios(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE ordenes_servicio_empleados (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  orden_servicio_id BIGINT NOT NULL,
+  empleado_id INT NOT NULL,
+  rol_en_servicio VARCHAR(100) DEFAULT 'técnico',
+  CONSTRAINT fk_ose_os FOREIGN KEY (orden_servicio_id) REFERENCES ordenes_servicio(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ose_empleado FOREIGN KEY (empleado_id) REFERENCES empleados(id)
+) ENGINE=InnoDB;
+
+-- Opcional: productos utilizados en una orden de servicio (materiales)
+CREATE TABLE ordenes_servicio_items (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  orden_servicio_id BIGINT NOT NULL,
+  producto_id INT NOT NULL,
+  cantidad DECIMAL(12,2) NOT NULL,
+  costo_aplicado DECIMAL(12,2) DEFAULT 0,
+  CONSTRAINT fk_osi_os FOREIGN KEY (orden_servicio_id) REFERENCES ordenes_servicio(id) ON DELETE CASCADE,
+  CONSTRAINT fk_osi_prod FOREIGN KEY (producto_id) REFERENCES productos(id)
+) ENGINE=InnoDB;
+
